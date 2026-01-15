@@ -3,16 +3,6 @@
 import dns.resolver
 
 
-def clean_domain(domain):
-    """URL d'éntrée"""
-    if domain.startswith("http://"):
-        domain = domain[7:]
-    if domain.startswith("https://"):
-        domain = domain[8:]
-    if domain.endswith("/"):
-        domain = domain[:-1]
-    return domain.split("/")[0]
-
 
 def get_parent_domain(domain):
     """Extrait le domaine parent"""
@@ -97,15 +87,14 @@ def resolve_layer(domains, layer_num, all_resolved):
             for rtype, values in records.items():
                 for val in values[:3]:
                     print(f"   ├─ {rtype}: {val}")
-        
-        """Extraire les domaines à explorer (y compris parent)"""
-        found = extract_domains_from_records(records, domain)
-        new_domains = found - all_resolved - domains
-        
-        """Afficher le parent"""
+        """afficher les parents(explorer a la place)"""  
         parent = get_parent_domain(domain)
         if parent and parent not in all_resolved:
             print(f"   └─ Parent: {parent}")
+
+        """Extraire les domaines à explorer (y compris parent)"""
+        found = extract_domains_from_records(records, domain)
+        new_domains = found - all_resolved - domains
         
         if new_domains:
             next_domains.update(new_domains)
@@ -122,7 +111,6 @@ def main():
     
     """Demander le domaine"""
     domain = input("\n veuillez donner le nom de domaine: ").strip()
-    domain = clean_domain(domain)
     
     """Demander le nombre de couches"""
     try:
