@@ -87,12 +87,12 @@ def resolve_layer(domains, layer_num, all_resolved):
             for rtype, values in records.items():
                 for val in values[:3]:
                     print(f"   ├─ {rtype}: {val}")
-        """afficher les parents(explorer a la place)"""  
+        """Explorer le parent au lieu de l'afficher"""  
         parent = get_parent_domain(domain)
-        if parent and parent not in all_resolved:
-            print(f"   └─ Parent: {parent}")
+        if parent and parent not in all_resolved and parent not in domains:
+            next_domains.add(parent)
 
-        """Extraire les domaines à explorer (y compris parent)"""
+        """Extraire les domaines à explorer avec les parent et les enregistrements"""
         found = extract_domains_from_records(records, domain)
         new_domains = found - all_resolved - domains
         
