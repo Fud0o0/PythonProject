@@ -58,6 +58,39 @@ def extract_domains_from_records(records, current_domain):
             if parts:
                 domains.add(parts[0].rstrip("."))
     
+    """SRV -> serveur cible"""
+    if "SRV" in records:
+        for srv in records["SRV"]:
+            parts = srv.split()
+            if len(parts) >= 4:
+                domains.add(parts[3].rstrip("."))
+    
+    """TXT -> SPF includes et autres domaines"""
+    if "TXT" in records:
+        for txt in records["TXT"]:
+            # Extraire les includes SPF
+            if "include:" in txt:
+                import re
+                includes = re.findall(r'include:([^\s"]+)', txt)
+                for inc in includes:
+                    domains.add(inc.rstrip("."))
+            # Extraire les redirects SPF
+            if "redirect=" in txt:
+                import re
+                redirects = re.findall(r'redirect=([^\s"]+)', txt)
+                for redir in redirects:
+                    domains.add(redir.rstrip("."))
+    
+    """CAA -> autorités de certification"""
+    if "CAA" in records:
+        for caa in records["CAA"]:
+            parts = caa.split()
+            if len(parts) >= 3:
+                # Le dernier élément est souvent un domaine
+                domain_part = parts[-1].strip('"').rstrip(".")
+                if "." in domain_part and not domain_part.startswith("http"):
+                    domains.add(domain_part)
+    
     """PARENT DOMAIN (pour continuer l'exploration)"""
     parent = get_parent_domain(current_domain)
     if parent:
