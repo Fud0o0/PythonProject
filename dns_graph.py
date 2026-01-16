@@ -57,7 +57,7 @@ def draw_dns_graph(edges, all_domains, start_domain, output_dir=None):
             # Pour les grands graphes, layout hiérarchique
             pos = nx.kamada_kawai_layout(G)
         else:
-            pos = nx.spring_layout(G, k=k_spacing, iterations=100, seed=42)
+            pos = nx.spring_layout(G, k=k_spacing, iterations=100, seed=42, scale=3)
     except:
         pos = nx.kamada_kawai_layout(G)
     
