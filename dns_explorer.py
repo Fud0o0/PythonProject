@@ -3,9 +3,12 @@
 import dns.resolver
 
 
+"""on importe le module dns.resolver pour faire les requetes DNS"""
 
 def get_parent_domain(domain):
-    """Extrait le domaine parent"""
+    """Cette fonction récupère le domaine parent
+    genre si t'as "sub.exemple.com" elle te renvoi "exemple.com"
+    c'est pratique pour remonter dans la hierarchie"""
     parts = domain.split(".")
     if len(parts) > 2:
         return ".".join(parts[1:])
@@ -13,14 +16,17 @@ def get_parent_domain(domain):
 
 
 def resolve_all_records(domain, timeout=3):
-    """Résout tous les types d'enregistrements DNS"""
-    record_types = ["A", "AAAA", "CNAME", "MX", "NS", "TXT", "SOA"]
+    """Ici on fait toutes les requetes DNS possible sur un domaine
+    genre A, AAAA, MX, NS etc... sa permet de tout récupérer d'un coup"""
+    record_types = ["A", "AAAA", "CNAME", "MX", "NS", "TXT", "SOA","PTR","CAA","SRV"]
     results = {}
     
+    """on crée le resolver avec un timeout pour pas attendre trop longtemps"""
     resolver = dns.resolver.Resolver()
     resolver.timeout = timeout
     resolver.lifetime = timeout
     
+    """on boucle sur chaque type et on essaye de résoudre"""
     for rtype in record_types:
         try:
             answers = resolver.resolve(domain, rtype)
@@ -32,66 +38,80 @@ def resolve_all_records(domain, timeout=3):
 
 
 def extract_domains_from_records(records, current_domain):
-    """Extrait les domaines cibles des enregistrements + parent"""
+    """Cette fonction extrait tout les domaines qu'on trouve dans les enregistrements
+    comme sa on peut les explorer après dans les prochaines couches"""
     domains = set()
-    """CNAME -> cible directe"""
+    
+    """CNAME -> c'est une redirection vers un autre domaine"""
     if "CNAME" in records:
         for cname in records["CNAME"]:
             domains.add(cname.rstrip("."))
     
-    """MX -> serveur mail"""
+    """MX -> c'est les serveurs mails, genre smtp.google.com"""
     if "MX" in records:
         for mx in records["MX"]:
             parts = mx.split()
             if len(parts) >= 2:
                 domains.add(parts[1].rstrip("."))
     
-    """NS -> serveurs DNS"""
+    """NS -> les serveurs DNS qui gèrent le domaine"""
     if "NS" in records:
         for ns in records["NS"]:
             domains.add(ns.rstrip("."))
     
-    """SOA -> serveur primaire"""
+    """SOA -> le serveur DNS primaire du domaine"""
     if "SOA" in records:
         for soa in records["SOA"]:
             parts = soa.split()
             if parts:
                 domains.add(parts[0].rstrip("."))
     
-    """SRV -> serveur cible"""
+    """SRV -> des services genre _sip ou _xmpp avec leur serveur"""
     if "SRV" in records:
         for srv in records["SRV"]:
             parts = srv.split()
             if len(parts) >= 4:
                 domains.add(parts[3].rstrip("."))
     
-    """TXT -> SPF includes et autres domaines"""
+    """TXT -> ya souvent des trucs SPF dedans avec des includes"""
     if "TXT" in records:
         for txt in records["TXT"]:
-            # Extraire les includes SPF
             if "include:" in txt:
                 import re
                 includes = re.findall(r'include:([^\s"]+)', txt)
                 for inc in includes:
                     domains.add(inc.rstrip("."))
-            # Extraire les redirects SPF
             if "redirect=" in txt:
                 import re
                 redirects = re.findall(r'redirect=([^\s"]+)', txt)
                 for redir in redirects:
                     domains.add(redir.rstrip("."))
+
+    """AAAA -> l'adresse IPv6"""
+    if "AAAA" in records:
+        for aaaa in records["AAAA"]:
+            domains.add(aaaa.rstrip("."))
+
+    """A -> l'adresse IPv4"""
+    if "A" in records:
+        for a in records["A"]:
+            domains.add(a.rstrip("."))
     
-    """CAA -> autorités de certification"""
+    """CAA -> les autorités de certification autorisées"""
     if "CAA" in records:
         for caa in records["CAA"]:
             parts = caa.split()
             if len(parts) >= 3:
-                # Le dernier élément est souvent un domaine
                 domain_part = parts[-1].strip('"').rstrip(".")
                 if "." in domain_part and not domain_part.startswith("http"):
                     domains.add(domain_part)
     
-    """PARENT DOMAIN (pour continuer l'exploration)"""
+    """PTR -> résolution inverse, genre IP vers nom de domaine"""
+    if "PTR" in records:
+        for ptr in records["PTR"]:
+            domains.add(ptr.rstrip("."))
+    
+    """on ajoute aussi le domaine parent pour remonter la hiérarchie"""
     parent = get_parent_domain(current_domain)
     if parent:
         domains.add(parent)
@@ -100,32 +120,35 @@ def extract_domains_from_records(records, current_domain):
 
 
 def resolve_layer(domains, layer_num, all_resolved):
-    """Résout une couche de domaines"""
+    """Cette fonction résoud une couche complète de domaines
+    elle affiche les résultats et retourne les nouveaux domaines a explorer"""
     print(f"\n{'='*60}")
     print(f"Couche n° {layer_num}")
     print(f"{'='*60}")
     
     next_domains = set()
     
+    """on boucle sur chaque domaine de la couche"""
     for domain in sorted(domains):
-        print(f"\n🔹 {domain}")
+        print(f"\n • {domain}")
         
-        """Résoudre tous les enregistrements DNS"""
+        """on résoud tout les enregistrements du domaine"""
         records = resolve_all_records(domain)
         
         if not records:
             print(f"   └─ Il n'y a aucun enregistement trouvé")
         else:
-            """Afficher chaque type"""
+            """on affiche les 3 premiers de chaque type"""
             for rtype, values in records.items():
                 for val in values[:3]:
                     print(f"   ├─ {rtype}: {val}")
-        """Explorer le parent au lieu de l'afficher"""  
+        
+        """on check si le parent est pas déja exploré"""
         parent = get_parent_domain(domain)
         if parent and parent not in all_resolved and parent not in domains:
             next_domains.add(parent)
 
-        """Extraire les domaines à explorer avec les parent et les enregistrements"""
+        """on extrait tout les domaines des enregistrements"""
         found = extract_domains_from_records(records, domain)
         new_domains = found - all_resolved - domains
         
@@ -137,43 +160,49 @@ def resolve_layer(domains, layer_num, all_resolved):
 
 
 def main():
-    """Fonction principale"""
-    print("=" * 60)
-    print("   exploration des couche DNS")
-    print("=" * 60)
-    
-    """Demander le domaine"""
-    domain = input("\n veuillez donner le nom de domaine: ").strip()
-    
-    """Demander le nombre de couches"""
-    try:
-        max_layers = int(input(" Nombre de couches: ").strip())
-    except:
-        max_layers = 3
-    
-    """Exploration couche par couche"""
-    current_domains = {domain}
-    all_resolved = set()
-    
-    for layer in range(1, max_layers + 1):
-        to_resolve = current_domains - all_resolved
+    """Fonction principale qui gère tout le programme"""
+    while True:
+        print("\n" + "=" * 60)
+        print("   exploration des couche DNS")
+        print("=" * 60)
         
-        if not to_resolve:
-            print(f"\n il n'y a plus de domaines à explorer après {layer-1} couche(s)")
-            break
+        """on demande le domaine a l'utilisateur"""
+        domain = input("\n veuillez donner le nom de domaine: ").strip()
         
-        all_resolved.update(to_resolve)
-        next_domains = resolve_layer(to_resolve, layer, all_resolved)
-        current_domains = next_domains
-    
-    """Résumé"""
-    print(f"\n{'='*60}")
-    print(f" Total: {len(all_resolved)} domaine(s) exploré(s)")
-    print(f"{'='*60}")
-    for d in sorted(all_resolved):
-        print(f"   • {d}")
+        """on demande combien de couches il veut explorer"""
+        try:
+            max_layers = int(input(" Nombre de couches: ").strip())
+        except:
+            max_layers = 3
+        
+        """on commence avec le domaine donné"""
+        current_domains = {domain}
+        all_resolved = set()
+        
+        """on boucle sur chaque couche"""
+        for layer in range(1, max_layers + 1):
+            to_resolve = current_domains - all_resolved
+            
+            """si ya plus rien a explorer on arrête"""
+            if not to_resolve:
+                print(f"\n il n'y a plus de domaines à explorer après {layer-1} couche(s)")
+                break
+            
+            all_resolved.update(to_resolve)
+            next_domains = resolve_layer(to_resolve, layer, all_resolved)
+            current_domains = next_domains
+        
+        """a la fin on affiche le résumé de tout ce qu'on a trouvé"""
+        print(f"\n{'='*60}")
+        print(f" Total: {len(all_resolved)} domaine(s) exploré(s)")
+        print(f"{'='*60}")
+        for d in sorted(all_resolved):
+            print(f"   • {d}")
+        
+        print("\n" + "-" * 60)
+        print(" Redémarrage automatique...")
+        print("-" * 60)
 
 
 if __name__ == "__main__":
     main()
-
