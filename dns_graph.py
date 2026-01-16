@@ -18,8 +18,11 @@ def draw_dns_graph(edges, all_domains, start_domain):
         G.add_edge(source, target)
     
     """Configuration de la figure"""
-    plt.figure(figsize=(16, 12))
-    plt.title(f"Graphe DNS - {start_domain}", fontsize=16, fontweight='bold')
+    fig = plt.figure(figsize=(16, 12))
+    fig.set_facecolor('#1a1a2e')  # Fond sombre bleu-gris
+    ax = plt.gca()
+    ax.set_facecolor('#1a1a2e')
+    plt.title(f"Graphe DNS - {start_domain}", fontsize=16, fontweight='bold', color='white')
     
     """Layout pour espacer les noeuds"""
     try:
@@ -56,7 +59,7 @@ def draw_dns_graph(edges, all_domains, start_domain):
             labels[node] = node.split('.')[0] + "..."
         else:
             labels[node] = node
-    nx.draw_networkx_labels(G, pos, labels, font_size=8, font_weight='bold')
+    nx.draw_networkx_labels(G, pos, labels, font_size=8, font_weight='bold', font_color='white')
     
     """légende des couleurs"""
     legend_elements = [
@@ -66,7 +69,8 @@ def draw_dns_graph(edges, all_domains, start_domain):
         plt.scatter([], [], c='#96CEB4', s=100, label='Couche 4'),
         plt.scatter([], [], c='#DDA0DD', s=100, label='Couche 5+'),
     ]
-    plt.legend(handles=legend_elements, loc='upper left')
+    plt.legend(handles=legend_elements, loc='upper left', 
+               facecolor='#2d2d44', edgecolor='white', labelcolor='white')
     
     plt.axis('off')
     plt.tight_layout()
