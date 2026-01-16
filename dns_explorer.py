@@ -158,15 +158,121 @@ def resolve_layer(domains, layer_num, all_resolved, graph_edges, domain_layers):
     return next_domains
 
 
-def main():
-    """Fonction principale qui gère tout le programme"""
+def explore_dns(domain, max_layers, export=False, output_dir="exports"):
+    """Explore un domaine DNS sur plusieurs couches
+    
+    Args:
+        domain: Le domaine de départ
+        max_layers: Nombre de couches à explorer
+        export: Si True, exporte le graphe
+        output_dir: Dossier pour les exports
+        
+    Returns:
+        tuple: (all_resolved, graph_edges, domain_layers)
+    """
+    print("\n" + "=" * 60)
+    print(" Exploration des couches DNS")
+    print("=" * 60)
+    print(f" Domaine: {domain}")
+    print(f" Couches: {max_layers}")
+    
+    """on commence avec le domaine donné"""
+    current_domains = {domain}
+    all_resolved = set()
+    
+    """données pour le graphe"""
+    graph_edges = []
+    domain_layers = {}
+    
+    """on boucle sur chaque couche"""
+    for layer in range(1, max_layers + 1):
+        to_resolve = current_domains - all_resolved
+        
+        """si il y a plus rien a explorer on arrête"""
+        if not to_resolve:
+            print(f"\n Il n'y a plus de domaines à explorer après {layer-1} couche(s)")
+            break
+        
+        all_resolved.update(to_resolve)
+        next_domains = resolve_layer(to_resolve, layer, all_resolved, graph_edges, domain_layers)
+        current_domains = next_domains
+    
+    """a la fin on affiche le résumé de tout ce qu'on a trouvé"""
+    print(f"\n{'='*60}")
+    print(f" Total: {len(all_resolved)} domaine(s) exploré(s)")
+    print(f"{'='*60}")
+    for d in sorted(all_resolved):
+        print(f"•{d}")
+    
+    """on affiche le graphe à la fin"""
+    if len(domain_layers) > 0:
+        draw_dns_graph(graph_edges, domain_layers, domain, output_dir if export else None)
+    
+    return all_resolved, graph_edges, domain_layers
+
+
+def parse_args():
+    """Parse les arguments de la ligne de commande"""
+    import argparse
+    
+    parser = argparse.ArgumentParser(
+        description="Explorateur DNS multi-couches avec visualisation graphique",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Exemples:
+  python dns_explorer.py -d google.com -l 3
+  python dns_explorer.py --domain example.org --layers 5 --export
+  python dns_explorer.py --loop  (mode interactif)
+        """
+    )
+    
+    parser.add_argument(
+        "-d", "--domain",
+        type=str,
+        help="Domaine à explorer (ex: google.com)"
+    )
+    
+    parser.add_argument(
+        "-l", "--layers",
+        type=int,
+        default=3,
+        help="Nombre de couches à explorer (défaut: 3)"
+    )
+    
+    parser.add_argument(
+        "-e", "--export",
+        action="store_true",
+        help="Exporter le graphe en DOT/SVG/PNG"
+    )
+    
+    parser.add_argument(
+        "-o", "--output",
+        type=str,
+        default="exports",
+        help="Dossier de sortie pour les exports (défaut: exports)"
+    )
+    
+    parser.add_argument(
+        "--loop",
+        action="store_true",
+        help="Mode interactif en boucle"
+    )
+    
+    return parser.parse_args()
+
+
+def interactive_mode():
+    """Mode interactif qui boucle en continu"""
     while True:
         print("\n" + "=" * 60)
-        print(" exploration des couche DNS")
+        print(" Mode interactif - Exploration DNS")
         print("=" * 60)
         
         """on demande le domaine a l'utilisateur"""
-        domain = input("\n veuillez donner le nom de domaine: ").strip()
+        domain = input("\n Veuillez donner le nom de domaine: ").strip()
+        if not domain:
+            print(" Domaine invalide!")
+            continue
         
         """on demande combien de couches il veut explorer"""
         try:
@@ -174,41 +280,27 @@ def main():
         except:
             max_layers = 3
         
-        """on commence avec le domaine donné"""
-        current_domains = {domain}
-        all_resolved = set()
+        """on demande si l'utilisateur veut exporter le graphe"""
+        export = input(" Exporter le graphe (DOT/SVG/PNG)? (o/n): ").strip().lower()
+        do_export = export in ('o', 'oui', 'y', 'yes')
         
-        """données pour le graphe"""
-        graph_edges = []
-        domain_layers = {}
-        
-        """on boucle sur chaque couche"""
-        for layer in range(1, max_layers + 1):
-            to_resolve = current_domains - all_resolved
-            
-            """si il y a plus rien a explorer on arrête"""
-            if not to_resolve:
-                print(f"\n il n'y a plus de domaines à explorer après {layer-1} couche(s)")
-                break
-            
-            all_resolved.update(to_resolve)
-            next_domains = resolve_layer(to_resolve, layer, all_resolved, graph_edges, domain_layers)
-            current_domains = next_domains
-        
-        """a la fin on affiche le résumé de tout ce qu'on a trouvé"""
-        print(f"\n{'='*60}")
-        print(f" Total: {len(all_resolved)} domaine(s) exploré(s)")
-        print(f"{'='*60}")
-        for d in sorted(all_resolved):
-            print(f"•{d}")
-        
-        """on affiche le graphe à la fin"""
-        if len(domain_layers) > 0:
-            draw_dns_graph(graph_edges, domain_layers, domain)
+        explore_dns(domain, max_layers, export=do_export)
         
         print("\n" + "-" * 60)
         print(" Redémarrage automatique...")
         print("-" * 60)
+
+
+def main():
+    """Fonction principale qui gère tout le programme"""
+    args = parse_args()
+    
+    if args.loop or args.domain is None:
+        """Mode interactif"""
+        interactive_mode()
+    else:
+        """Mode ligne de commande"""
+        explore_dns(args.domain, args.layers, export=args.export, output_dir=args.output)
 
 
 if __name__ == "__main__":
