@@ -1,13 +1,14 @@
 """dns_explorer.py - Exploration DNS couche par couche (avec parents)"""
 
 import dns.resolver
+from dns_graph import draw_dns_graph
 
 
 """on importe le module dns.resolver pour faire les requetes DNS"""
 
 def get_parent_domain(domain):
     """Cette fonction récupère le domaine parent
-    genre si t'as "sub.exemple.com" elle te renvoi "exemple.com"
+    par exemple si on a "sub.exemple.com" elle renvoi "exemple.com"
     c'est pratique pour remonter dans la hierarchie"""
     parts = domain.split(".")
     if len(parts) > 2:
@@ -119,11 +120,11 @@ def extract_domains_from_records(records, current_domain):
     return domains
 
 
-def resolve_layer(domains, layer_num, all_resolved):
+def resolve_layer(domains, layer_num, all_resolved, graph_edges, domain_layers):
     """Cette fonction résoud une couche complète de domaines
     elle affiche les résultats et retourne les nouveaux domaines a explorer"""
     print(f"\n{'='*60}")
-    print(f"Couche n° {layer_num}")
+    print(f" Couche n° {layer_num}")
     print(f"{'='*60}")
     
     next_domains = set()
@@ -132,25 +133,33 @@ def resolve_layer(domains, layer_num, all_resolved):
     for domain in sorted(domains):
         print(f"\n • {domain}")
         
+        """on enregistre la couche du domaine pour le graphe"""
+        domain_layers[domain] = layer_num
+        
         """on résoud tout les enregistrements du domaine"""
         records = resolve_all_records(domain)
         
         if not records:
-            print(f"   └─ Il n'y a aucun enregistement trouvé")
+            print(f" └─ Il n'y a aucun enregistement trouvé")
         else:
             """on affiche les 3 premiers de chaque type"""
             for rtype, values in records.items():
                 for val in values[:3]:
-                    print(f"   ├─ {rtype}: {val}")
+                    print(f" ├─ {rtype}: {val}")
         
         """on check si le parent est pas déja exploré"""
         parent = get_parent_domain(domain)
         if parent and parent not in all_resolved and parent not in domains:
             next_domains.add(parent)
+            graph_edges.append((domain, parent))
 
         """on extrait tout les domaines des enregistrements"""
         found = extract_domains_from_records(records, domain)
         new_domains = found - all_resolved - domains
+        
+        """on ajoute les liens pour le graphe"""
+        for target in new_domains:
+            graph_edges.append((domain, target))
         
         if new_domains:
             next_domains.update(new_domains)
@@ -163,7 +172,7 @@ def main():
     """Fonction principale qui gère tout le programme"""
     while True:
         print("\n" + "=" * 60)
-        print("   exploration des couche DNS")
+        print(" exploration des couche DNS")
         print("=" * 60)
         
         """on demande le domaine a l'utilisateur"""
@@ -179,17 +188,21 @@ def main():
         current_domains = {domain}
         all_resolved = set()
         
+        """données pour le graphe"""
+        graph_edges = []
+        domain_layers = {}
+        
         """on boucle sur chaque couche"""
         for layer in range(1, max_layers + 1):
             to_resolve = current_domains - all_resolved
             
-            """si ya plus rien a explorer on arrête"""
+            """si il y a plus rien a explorer on arrête"""
             if not to_resolve:
                 print(f"\n il n'y a plus de domaines à explorer après {layer-1} couche(s)")
                 break
             
             all_resolved.update(to_resolve)
-            next_domains = resolve_layer(to_resolve, layer, all_resolved)
+            next_domains = resolve_layer(to_resolve, layer, all_resolved, graph_edges, domain_layers)
             current_domains = next_domains
         
         """a la fin on affiche le résumé de tout ce qu'on a trouvé"""
@@ -197,7 +210,11 @@ def main():
         print(f" Total: {len(all_resolved)} domaine(s) exploré(s)")
         print(f"{'='*60}")
         for d in sorted(all_resolved):
-            print(f"   • {d}")
+            print(f"•{d}")
+        
+        """on affiche le graphe à la fin"""
+        if len(domain_layers) > 0:
+            draw_dns_graph(graph_edges, domain_layers, domain)
         
         print("\n" + "-" * 60)
         print(" Redémarrage automatique...")
