@@ -87,16 +87,6 @@ def extract_domains_from_records(records, current_domain):
                 redirects = re.findall(r'redirect=([^\s"]+)', txt)
                 for redir in redirects:
                     domains.add(redir.rstrip("."))
-
-    """AAAA -> l'adresse IPv6"""
-    if "AAAA" in records:
-        for aaaa in records["AAAA"]:
-            domains.add(aaaa.rstrip("."))
-
-    """A -> l'adresse IPv4"""
-    if "A" in records:
-        for a in records["A"]:
-            domains.add(a.rstrip("."))
     
     """CAA -> les autorités de certification autorisées"""
     if "CAA" in records:
