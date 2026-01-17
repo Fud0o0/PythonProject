@@ -243,6 +243,13 @@ def explore_dns(domain, max_layers, export=False, output_dir="exports"):
     for d in sorted(all_resolved):
         print(f"•{d}")
     
+    """on assigne une couche aux domaines découverts mais non explorés"""
+    if domain_layers:
+        max_layer = max(domain_layers.values())
+        for source, target in graph_edges:
+            if target not in domain_layers:
+                domain_layers[target] = max_layer + 1
+    
     """on affiche le graphe à la fin"""
     if len(domain_layers) > 0:
         draw_dns_graph(graph_edges, domain_layers, domain, output_dir if export else None)
