@@ -1,10 +1,10 @@
 """dns_explorer.py - Exploration DNS couche par couche (avec parents)"""
 
+import re
+import argparse
 import dns.resolver
+import dns.reversename
 from dns_graph import draw_dns_graph
-
-
-"""on importe le module dns.resolver pour faire les requetes DNS"""
 
 def get_parent_domain(domain):
     """Cette fonction récupère le domaine parent
@@ -38,10 +38,44 @@ def resolve_all_records(domain, timeout=3):
     return results
 
 
+def reverse_dns(ip, timeout=3):
+    """Fait un reverse DNS (PTR) sur une adresse IP
+    Retourne le nom de domaine associé ou None si pas trouvé"""
+
+    
+    resolver = dns.resolver.Resolver()
+    resolver.timeout = timeout
+    resolver.lifetime = timeout
+    
+    try:
+        """On convertit l'IP en format reverse (in-addr.arpa ou ip6.arpa)"""
+        reverse_name = dns.reversename.from_address(ip)
+        answers = resolver.resolve(reverse_name, "PTR")
+        return [answer.to_text().rstrip(".") for answer in answers]
+    except:
+        return []
+
+
 def extract_domains_from_records(records, current_domain):
     """Cette fonction extrait tout les domaines qu'on trouve dans les enregistrements
     comme sa on peut les explorer après dans les prochaines couches"""
     domains = set()
+    
+    """A -> on fait un reverse DNS pour trouver les domaines associés aux IPs"""
+    if "A" in records:
+        for ip in records["A"]:
+            ptr_domains = reverse_dns(ip)
+            for ptr_domain in ptr_domains:
+                if ptr_domain and "." in ptr_domain:
+                    domains.add(ptr_domain)
+    
+    """AAAA -> pareil mais pour les IPv6"""
+    if "AAAA" in records:
+        for ip in records["AAAA"]:
+            ptr_domains = reverse_dns(ip)
+            for ptr_domain in ptr_domains:
+                if ptr_domain and "." in ptr_domain:
+                    domains.add(ptr_domain)
     
     """CNAME -> c'est une redirection vers un autre domaine"""
     if "CNAME" in records:
@@ -78,12 +112,12 @@ def extract_domains_from_records(records, current_domain):
     if "TXT" in records:
         for txt in records["TXT"]:
             if "include:" in txt:
-                import re
+
                 includes = re.findall(r'include:([^\s"]+)', txt)
                 for inc in includes:
                     domains.add(inc.rstrip("."))
             if "redirect=" in txt:
-                import re
+
                 redirects = re.findall(r'redirect=([^\s"]+)', txt)
                 for redir in redirects:
                     domains.add(redir.rstrip("."))
@@ -136,6 +170,11 @@ def resolve_layer(domains, layer_num, all_resolved, graph_edges, domain_layers):
             for rtype, values in records.items():
                 for val in values[:3]:
                     print(f" ├─ {rtype}: {val}")
+                    """si c'est une IP, on fait le reverse DNS et on l'affiche"""
+                    if rtype in ("A", "AAAA"):
+                        ptr_results = reverse_dns(val)
+                        for ptr in ptr_results:
+                            print(f" │   └─ PTR: {ptr}")
         
         """on check si le parent est pas déja exploré"""
         parent = get_parent_domain(domain)
@@ -213,7 +252,7 @@ def explore_dns(domain, max_layers, export=False, output_dir="exports"):
 
 def parse_args():
     """Parse les arguments de la ligne de commande"""
-    import argparse
+
     
     parser = argparse.ArgumentParser(
         description="Explorateur DNS multi-couches avec visualisation graphique",
